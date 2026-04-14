@@ -5,6 +5,7 @@ description = "Web viewer and mapping config generator for db-migration-validato
 requires-python = ">=3.12"
 dependencies = [
     "flask>=3.0.0",
+    "openpyxl>=3.1.0",
 ]
 
 [build-system]

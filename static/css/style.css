@@ -190,6 +190,11 @@ main.container { padding-top: 24px; padding-bottom: 40px; }
 .mg-fields-table select:focus { outline: none; border-color: #1976d2; }
 .mg-fields-table input[type="checkbox"] { margin: 0; }
 .mg-fields-table td:last-child { white-space: nowrap; }
+.mg-fields-body { counter-reset: field-seq; }
+.mg-fields-body .mg-field-row { counter-increment: field-seq; }
+.mg-fields-body .fd-seq::before { content: counter(field-seq); }
+.fd-seq { color: #aaa; font-size: 11px; text-align: center; padding: 0 6px; width: 24px; white-space: nowrap; }
+.fd-seq-th { width: 24px; text-align: center; }
 .mg-field-row td:nth-child(1) input { min-width: 90px; }
 .mg-field-row td:nth-child(2) input { min-width: 90px; }
 .mg-field-row td:nth-child(5) input { min-width: 100px; }

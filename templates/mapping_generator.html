@@ -4,16 +4,16 @@
 {% block content %}
 <h1 class="page-title">映射配置生成器</h1>
 
-<!-- CSV 导入 -->
+<!-- Excel 导入 -->
 <section class="card mg-section">
-    <h2>导入 CSV</h2>
-    <p class="meta">上传字段映射 CSV 文件快速生成配置，或在下方手动编辑。</p>
+    <h2>导入 Excel</h2>
+    <p class="meta">上传字段映射 Excel 文件快速生成配置，或在下方手动编辑。支持多 Sheet 导入。</p>
     <div class="mg-csv-import">
-        <input type="file" id="csv-file" accept=".csv" class="input-path">
-        <button class="btn btn-primary" onclick="MG.importCSV()">解析 CSV</button>
-        <a href="/api/csv-template" class="btn btn-sm" download="csv_template.csv">下载 CSV 模板</a>
+        <input type="file" id="excel-file" accept=".xlsx,.xls" class="input-path">
+        <button class="btn btn-primary" onclick="MG.importExcel()">解析 Excel</button>
+        <a href="/api/excel-template" class="btn btn-sm" download="mapping_template.xlsx">下载 Excel 模板</a>
     </div>
-    <div id="csv-error" class="alert alert-error" style="display:none"></div>
+    <div id="import-error" class="alert alert-error" style="display:none"></div>
 </section>
 
 <!-- 数据库连接 -->
@@ -198,7 +198,10 @@
                 <h4>表过滤条件</h4>
                 <div class="mg-table-filters">
                     <div class="mg-form-row">
-                        <div class="mg-form-group" style="flex:1"><label>别名: 过滤条件（每行一个，格式 alias:条件）</label><textarea class="tbl-table-filters" rows="3" placeholder="o: o.deleted_at IS NULL&#10;u: u.status = 'active'"></textarea></div>
+                        <div class="mg-form-group" style="flex:1"><label>源表过滤（每行一个，格式 alias:条件）</label><textarea class="tbl-table-filters" rows="3" placeholder="o: o.deleted_at IS NULL&#10;u: u.status = 'active'"></textarea></div>
+                    </div>
+                    <div class="mg-form-row">
+                        <div class="mg-form-group" style="flex:1"><label>目标表过滤</label><input type="text" class="tbl-target-filter-multi" placeholder="type = 'X' AND status = 'active'"></div>
                     </div>
                 </div>
             </div>
@@ -213,6 +216,7 @@
                     <table class="mg-fields-table">
                         <thead>
                             <tr>
+                                <th class="fd-seq-th">#</th>
                                 <th>目标字段</th>
                                 <th>源字段</th>
                                 <th>主键</th>
@@ -238,6 +242,7 @@
 <!-- 字段行模板 -->
 <template id="tpl-field-row">
     <tr class="mg-field-row">
+        <td class="fd-seq"></td>
         <td><input type="text" class="fd-target" placeholder="user_id"></td>
         <td><input type="text" class="fd-source" placeholder="id 或 alias.field"></td>
         <td><input type="checkbox" class="fd-pk"></td>
@@ -328,5 +333,6 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="{{ url_for('static', filename='js/mapping_generator.js') }}"></script>
 {% endblock %}

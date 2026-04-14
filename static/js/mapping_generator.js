@@ -314,6 +314,11 @@ const MG = (function () {
                 if (Object.keys(tf).length) mapping.table_filters = tf;
             }
 
+            const targetFilterMulti = card.querySelector('.tbl-target-filter-multi').value.trim();
+            if (targetFilterMulti) {
+                mapping.filters = { target_filter: targetFilterMulti };
+            }
+
             const ss = parseInt(card.querySelector('.tbl-sample-size-multi').value) || 0;
             if (ss) mapping.sample_size = ss;
             const bs = parseInt(card.querySelector('.tbl-batch-size-multi').value) || 1000;
@@ -515,6 +520,10 @@ const MG = (function () {
                 const lines = Object.entries(tbl.table_filters).map(([k, v]) => `${k}: ${v}`).join('\n');
                 card.querySelector('.tbl-table-filters').value = lines;
             }
+            // Target filter for multi mode
+            if (tbl.filters && tbl.filters.target_filter) {
+                card.querySelector('.tbl-target-filter-multi').value = tbl.filters.target_filter;
+            }
         } else {
             card.querySelector('.tbl-source-table').value = tbl.source_table || '';
             card.querySelector('.tbl-target-table').value = tbl.target_table || '';
@@ -536,16 +545,16 @@ const MG = (function () {
     }
 
     // ----------------------------------------------------------------
-    // CSV import
+    // Excel import
     // ----------------------------------------------------------------
-    function importCSV() {
-        const fileInput = document.getElementById('csv-file');
-        const errDiv = document.getElementById('csv-error');
+    function importExcel() {
+        const fileInput = document.getElementById('excel-file');
+        const errDiv = document.getElementById('import-error');
         errDiv.style.display = 'none';
 
         const file = fileInput.files[0];
         if (!file) {
-            errDiv.textContent = '请先选择 CSV 文件';
+            errDiv.textContent = '请先选择 Excel 文件';
             errDiv.style.display = '';
             return;
         }
@@ -553,60 +562,36 @@ const MG = (function () {
         const reader = new FileReader();
         reader.onload = e => {
             try {
-                const rows = parseCSV(e.target.result);
-                if (rows.length < 2) throw new Error('CSV 至少需要表头和一行数据');
-                buildFromCSVRows(rows);
+                const data = new Uint8Array(e.target.result);
+                const wb = XLSX.read(data, { type: 'array' });
+                // Collect rows from all data sheets (skip "填写说明" sheet)
+                let allRows = null;
+                for (const name of wb.SheetNames) {
+                    if (name === '填写说明') continue;
+                    const sheet = wb.Sheets[name];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+                    if (rows.length < 2) continue;
+                    if (!allRows) {
+                        // First sheet: include header
+                        allRows = rows;
+                    } else {
+                        // Subsequent sheets: skip header row
+                        allRows = allRows.concat(rows.slice(1));
+                    }
+                }
+                if (!allRows || allRows.length < 2) throw new Error('Excel 中至少需要表头和一行数据');
+                // Convert all cell values to strings
+                const strRows = allRows.map(row => row.map(cell => cell != null ? String(cell) : ''));
+                buildFromRows(strRows);
             } catch (err) {
-                errDiv.textContent = 'CSV 解析错误: ' + err.message;
+                errDiv.textContent = 'Excel 解析错误: ' + err.message;
                 errDiv.style.display = '';
             }
         };
-        reader.readAsText(file);
+        reader.readAsArrayBuffer(file);
     }
 
-    function parseCSV(text) {
-        const rows = [];
-        let current = [];
-        let field = '';
-        let inQuotes = false;
-        const chars = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-
-        for (let i = 0; i < chars.length; i++) {
-            const ch = chars[i];
-            if (inQuotes) {
-                if (ch === '"') {
-                    if (i + 1 < chars.length && chars[i + 1] === '"') {
-                        field += '"';
-                        i++;
-                    } else {
-                        inQuotes = false;
-                    }
-                } else {
-                    field += ch;
-                }
-            } else {
-                if (ch === '"') {
-                    inQuotes = true;
-                } else if (ch === ',') {
-                    current.push(field);
-                    field = '';
-                } else if (ch === '\n') {
-                    current.push(field);
-                    field = '';
-                    rows.push(current);
-                    current = [];
-                } else {
-                    field += ch;
-                }
-            }
-        }
-        // Last field/row
-        current.push(field);
-        if (current.some(f => f.trim())) rows.push(current);
-        return rows;
-    }
-
-    function buildFromCSVRows(rows) {
+    function buildFromRows(rows) {
         const headers = rows[0].map(h => h.trim().toLowerCase());
         const col = name => headers.indexOf(name);
 
@@ -763,6 +748,6 @@ const MG = (function () {
         downloadJSON,
         copyJSON,
         loadFromJSON,
-        importCSV
+        importExcel
     };
 })();
