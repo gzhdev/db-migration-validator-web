@@ -333,6 +333,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="{{ url_for('static', filename='js/xlsx.full.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/mapping_generator.js') }}"></script>
 {% endblock %}
