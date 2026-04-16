@@ -384,6 +384,49 @@ const MG = (function () {
         document.querySelectorAll('.gs-format:checked').forEach(cb => formats.push(cb.value));
         if (formats.length) gs.report_format = formats;
 
+        // Debug settings
+        const debugEnabled = document.getElementById('gs-debug-enabled').checked;
+        if (debugEnabled) {
+            const debug = { enabled: true };
+            const debugOutputDir = document.getElementById('gs-debug-output-dir').value.trim();
+            if (debugOutputDir && debugOutputDir !== './debug') debug.output_dir = debugOutputDir;
+
+            const debugFormats = [];
+            document.querySelectorAll('.gs-debug-format:checked').forEach(cb => debugFormats.push(cb.value));
+            if (debugFormats.length && !(debugFormats.length === 1 && debugFormats[0] === 'jsonl')) {
+                debug.formats = debugFormats;
+            }
+
+            const maxRecords = parseInt(document.getElementById('gs-debug-max-records').value) || 10000;
+            if (maxRecords !== 10000) debug.max_records = maxRecords;
+
+            const bufferSize = parseInt(document.getElementById('gs-debug-buffer-size').value) || 1000;
+            if (bufferSize !== 1000) debug.buffer_size = bufferSize;
+
+            // Record types (only include if non-default)
+            const rt = {};
+            const rtMatched = document.getElementById('gs-debug-rt-matched').checked;
+            const rtMismatched = document.getElementById('gs-debug-rt-mismatched').checked;
+            const rtMissingSource = document.getElementById('gs-debug-rt-missing-source').checked;
+            const rtMissingTarget = document.getElementById('gs-debug-rt-missing-target').checked;
+            const rtValueCheck = document.getElementById('gs-debug-rt-value-check').checked;
+            if (rtMatched) rt.matched = true;
+            if (!rtMismatched) rt.mismatched = false;
+            if (!rtMissingSource) rt.missing_in_source = false;
+            if (!rtMissingTarget) rt.missing_in_target = false;
+            if (!rtValueCheck) rt.value_check_failed = false;
+            if (Object.keys(rt).length) debug.record_types = rt;
+
+            // Data content (only include if non-default)
+            const dc = {};
+            if (!document.getElementById('gs-debug-dc-raw-source').checked) dc.include_raw_source = false;
+            if (!document.getElementById('gs-debug-dc-expected').checked) dc.include_expected = false;
+            if (!document.getElementById('gs-debug-dc-target').checked) dc.include_target = false;
+            if (Object.keys(dc).length) debug.data_content = dc;
+
+            gs.debug = debug;
+        }
+
         if (Object.keys(gs).length) config.global_settings = gs;
 
         return config;
@@ -473,6 +516,34 @@ const MG = (function () {
                 document.querySelectorAll('.gs-format').forEach(cb => {
                     cb.checked = gs.report_format.includes(cb.value);
                 });
+            }
+
+            // Debug settings
+            if (gs.debug) {
+                const dbg = gs.debug;
+                document.getElementById('gs-debug-enabled').checked = !!dbg.enabled;
+                if (dbg.output_dir) document.getElementById('gs-debug-output-dir').value = dbg.output_dir;
+                if (dbg.max_records != null) document.getElementById('gs-debug-max-records').value = dbg.max_records;
+                if (dbg.buffer_size != null) document.getElementById('gs-debug-buffer-size').value = dbg.buffer_size;
+                if (dbg.formats) {
+                    document.querySelectorAll('.gs-debug-format').forEach(cb => {
+                        cb.checked = dbg.formats.includes(cb.value);
+                    });
+                }
+                if (dbg.record_types) {
+                    const rt = dbg.record_types;
+                    if (rt.matched != null) document.getElementById('gs-debug-rt-matched').checked = rt.matched;
+                    if (rt.mismatched != null) document.getElementById('gs-debug-rt-mismatched').checked = rt.mismatched;
+                    if (rt.missing_in_source != null) document.getElementById('gs-debug-rt-missing-source').checked = rt.missing_in_source;
+                    if (rt.missing_in_target != null) document.getElementById('gs-debug-rt-missing-target').checked = rt.missing_in_target;
+                    if (rt.value_check_failed != null) document.getElementById('gs-debug-rt-value-check').checked = rt.value_check_failed;
+                }
+                if (dbg.data_content) {
+                    const dc = dbg.data_content;
+                    if (dc.include_raw_source != null) document.getElementById('gs-debug-dc-raw-source').checked = dc.include_raw_source;
+                    if (dc.include_expected != null) document.getElementById('gs-debug-dc-expected').checked = dc.include_expected;
+                    if (dc.include_target != null) document.getElementById('gs-debug-dc-target').checked = dc.include_target;
+                }
             }
         }
     }
