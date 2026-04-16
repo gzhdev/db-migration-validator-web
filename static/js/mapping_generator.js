@@ -472,6 +472,162 @@ const MG = (function () {
     }
 
     // ----------------------------------------------------------------
+    // Export to Excel
+    // ----------------------------------------------------------------
+    function exportExcel() {
+        const config = collectAll();
+        const wb = XLSX.utils.book_new();
+
+        // ===== Sheet: 数据库连接 =====
+        const dbRows = [['配置项', '源数据库', '目标数据库']];
+        const dbKeys = [
+            ['type', '类型'], ['host', 'Host'], ['port', 'Port'],
+            ['database', 'Database'], ['user', 'User'],
+            ['password_env', 'Password 环境变量'],
+            ['service_name', 'Service Name'], ['sid', 'SID'],
+            ['thick_mode', 'Thick 模式'], ['oracle_client', 'Oracle Client 路径']
+        ];
+        const src = config.source_db || {};
+        const tgt = config.target_db || {};
+        dbKeys.forEach(([key, label]) => {
+            const sv = src[key], tv = tgt[key];
+            if (sv !== undefined || tv !== undefined) {
+                dbRows.push([label, sv != null ? String(sv) : '', tv != null ? String(tv) : '']);
+            }
+        });
+        const wsDb = XLSX.utils.aoa_to_sheet(dbRows);
+        wsDb['!cols'] = [{ wch: 20 }, { wch: 30 }, { wch: 30 }];
+        XLSX.utils.book_append_sheet(wb, wsDb, '数据库连接');
+
+        // ===== Sheet: 全局设置 =====
+        const gsRows = [['配置项', '值']];
+        const gs = config.global_settings || {};
+        gsRows.push(['parallel_workers', gs.parallel_workers || 4]);
+        gsRows.push(['timeout_seconds', gs.timeout_seconds || 3600]);
+        gsRows.push(['output_dir', gs.output_dir || './validation_reports']);
+        gsRows.push(['report_format', (gs.report_format || ['json']).join(', ')]);
+        if (gs.debug) {
+            const d = gs.debug;
+            gsRows.push([]);
+            gsRows.push(['[Debug 设置]', '']);
+            gsRows.push(['enabled', d.enabled ? 'true' : 'false']);
+            gsRows.push(['output_dir', d.output_dir || './debug']);
+            gsRows.push(['formats', (d.formats || ['jsonl']).join(', ')]);
+            gsRows.push(['max_records', d.max_records || 10000]);
+            gsRows.push(['buffer_size', d.buffer_size || 1000]);
+            const rt = d.record_types || {};
+            gsRows.push([]);
+            gsRows.push(['[记录类型]', '']);
+            gsRows.push(['matched', rt.matched ? 'true' : 'false']);
+            gsRows.push(['mismatched', rt.mismatched !== false ? 'true' : 'false']);
+            gsRows.push(['missing_in_source', rt.missing_in_source !== false ? 'true' : 'false']);
+            gsRows.push(['missing_in_target', rt.missing_in_target !== false ? 'true' : 'false']);
+            gsRows.push(['value_check_failed', rt.value_check_failed !== false ? 'true' : 'false']);
+            const dc = d.data_content || {};
+            gsRows.push([]);
+            gsRows.push(['[数据内容]', '']);
+            gsRows.push(['include_raw_source', dc.include_raw_source !== false ? 'true' : 'false']);
+            gsRows.push(['include_expected', dc.include_expected !== false ? 'true' : 'false']);
+            gsRows.push(['include_target', dc.include_target !== false ? 'true' : 'false']);
+        }
+        const wsGs = XLSX.utils.aoa_to_sheet(gsRows);
+        wsGs['!cols'] = [{ wch: 22 }, { wch: 40 }];
+        XLSX.utils.book_append_sheet(wb, wsGs, '全局设置');
+
+        // ===== Sheets: 每个表映射 =====
+        const FIELD_HEADERS = [
+            'target_field', 'source_field', 'is_primary_key',
+            'transform_type', 'transform_fields', 'transform_params',
+            'compare_rule', 'tolerance', 'nullable',
+            'description',
+            'min_value', 'max_value', 'allowed_values', 'pattern', 'value_check_expr'
+        ];
+
+        (config.tables || []).forEach((tbl, idx) => {
+            const rows = [];
+
+            // 表级信息
+            rows.push(['[表配置]', '']);
+            if (tbl.source_tables) {
+                rows.push(['模式', '多表 JOIN']);
+                rows.push(['source_tables', JSON.stringify(tbl.source_tables)]);
+                if (tbl.table_filters) rows.push(['table_filters', JSON.stringify(tbl.table_filters)]);
+            } else {
+                rows.push(['模式', '单表']);
+                rows.push(['source_table', tbl.source_table || '']);
+            }
+            rows.push(['target_table', tbl.target_table || '']);
+            if (tbl.source_schema) rows.push(['source_schema', tbl.source_schema]);
+            if (tbl.target_schema) rows.push(['target_schema', tbl.target_schema]);
+            if (tbl.description) rows.push(['description', tbl.description]);
+            if (tbl.filters) {
+                if (tbl.filters.source_filter) rows.push(['source_filter', tbl.filters.source_filter]);
+                if (tbl.filters.target_filter) rows.push(['target_filter', tbl.filters.target_filter]);
+            }
+            if (tbl.sample_size) rows.push(['sample_size', tbl.sample_size]);
+            if (tbl.batch_size && tbl.batch_size !== 1000) rows.push(['batch_size', tbl.batch_size]);
+
+            // 空行 + 字段映射表头
+            rows.push([]);
+            rows.push(FIELD_HEADERS);
+
+            // 字段行
+            (tbl.field_mappings || []).forEach(fm => {
+                const tfType = fm.transform ? fm.transform.type : '';
+                const tfFields = fm.transform && fm.transform.fields ? fm.transform.fields.join('|') : '';
+                let tfParams = '';
+                if (fm.transform) {
+                    const p = Object.assign({}, fm.transform);
+                    delete p.type; delete p.fields;
+                    if (Object.keys(p).length) tfParams = JSON.stringify(p);
+                }
+                rows.push([
+                    fm.target_field || '',
+                    fm.source_field || '',
+                    fm.is_primary_key ? 'true' : '',
+                    tfType,
+                    tfFields,
+                    tfParams,
+                    fm.compare_rule && fm.compare_rule !== 'exact' ? fm.compare_rule : '',
+                    fm.tolerance != null ? fm.tolerance : '',
+                    fm.nullable === false ? 'false' : '',
+                    fm.description || '',
+                    fm.min_value != null ? fm.min_value : '',
+                    fm.max_value != null ? fm.max_value : '',
+                    fm.allowed_values ? fm.allowed_values.join('|') : '',
+                    fm.pattern || '',
+                    fm.value_check_expr || ''
+                ]);
+            });
+
+            const ws = XLSX.utils.aoa_to_sheet(rows);
+            // 设置列宽
+            ws['!cols'] = FIELD_HEADERS.map(h => ({ wch: Math.max(h.length + 2, 14) }));
+
+            // Sheet 名称: 使用表名，截断避免超长
+            let sheetName = tbl.target_table || `表${idx + 1}`;
+            if (tbl.source_tables) {
+                sheetName = tbl.target_table || `JOIN_${idx + 1}`;
+            } else if (tbl.source_table) {
+                sheetName = `${tbl.source_table} → ${tbl.target_table}`;
+            }
+            // Excel sheet 名最长 31 字符，不能含 []:*?/\
+            sheetName = sheetName.replace(/[[\]:*?/\\]/g, '_').substring(0, 31);
+            // 避免重名
+            let finalName = sheetName;
+            let dup = 1;
+            while (wb.SheetNames.includes(finalName)) {
+                finalName = sheetName.substring(0, 28) + `(${++dup})`;
+            }
+
+            XLSX.utils.book_append_sheet(wb, ws, finalName);
+        });
+
+        // 下载
+        XLSX.writeFile(wb, 'mapping_config.xlsx');
+    }
+
+    // ----------------------------------------------------------------
     // Load from existing JSON
     // ----------------------------------------------------------------
     function loadFromJSON() {
@@ -818,6 +974,7 @@ const MG = (function () {
         previewJSON,
         downloadJSON,
         copyJSON,
+        exportExcel,
         loadFromJSON,
         importExcel
     };
